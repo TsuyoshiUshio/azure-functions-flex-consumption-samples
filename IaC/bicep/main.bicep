@@ -32,6 +32,9 @@ var resourceToken = toLower(uniqueString(subscription().id, environmentName, loc
 var appName = !empty(functionAppName) ? functionAppName : '${abbrs.webSitesFunctions}${resourceToken}'
 // Generate a unique container name that will be used for deployments.
 var deploymentStorageContainerName = 'app-package-${take(appName, 32)}-${take(resourceToken, 7)}'
+// UserAssigned identity name
+var identityName = '${appName}-identity'
+
 // tags that should be applied to all resources.
 var tags = {
   // Tag all resources with the environment name.
@@ -64,6 +67,7 @@ module storage 'core/storage/storage-account.bicep' = {
   scope: rg
   params: {
     location: location
+    allowBlobPublicAccess: false
     tags: tags
     name: !empty(storageAccountName) ? storageAccountName : '${abbrs.storageStorageAccounts}${resourceToken}'
     containers: [{name: deploymentStorageContainerName}]
@@ -85,6 +89,20 @@ module flexFunction 'core/host/function.bicep' = {
     functionAppRuntime: functionAppRuntime
     functionAppRuntimeVersion: functionAppRuntimeVersion
     maximumInstanceCount: maximumInstanceCount
-    instanceMemoryMB: instanceMemoryMB    
+    instanceMemoryMB: instanceMemoryMB
+    userManagedIdentityId: userManagedIdentity.outputs.identityId
+    userManagedIdentityClientId: userManagedIdentity.outputs.identityClientId
+    userManagedIdentityPrincipalId: userManagedIdentity.outputs.identityPrincipalId
+  }
+}
+
+// Add user-managed identity creation
+module userManagedIdentity './core/identity/userAssignedIdentity.bicep' = {
+  name: 'userManagedIdentity'
+  scope: rg
+  params: {
+    identityName: identityName
+    location: location
+    tags: tags
   }
 }

@@ -9,6 +9,9 @@ param functionAppRuntime string = 'dotnet-isolated'
 param functionAppRuntimeVersion string = '8.0'
 param maximumInstanceCount int = 100
 param instanceMemoryMB int = 2048
+param userManagedIdentityId string
+param userManagedIdentityPrincipalId string
+param userManagedIdentityClientId string
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' existing = {
   name: storageAccountName
@@ -38,7 +41,10 @@ resource flexFuncApp 'Microsoft.Web/sites@2024-04-01' = {
   tags: tags
   kind: 'functionapp,linux'
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userManagedIdentityId}': {}
+    }
   }
   properties: {
     serverFarmId: flexFuncPlan.id
@@ -52,6 +58,14 @@ resource flexFuncApp 'Microsoft.Web/sites@2024-04-01' = {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: appInsights.properties.ConnectionString
         }
+        {
+          name: 'AzureWebJobsStorage__credential'
+          value: 'managedidentity'
+        }
+        {
+          name: 'AzureWebJobsStorage__clientId'
+          value: userManagedIdentityClientId
+        }
       ]
     }
     functionAppConfig: {
@@ -60,7 +74,8 @@ resource flexFuncApp 'Microsoft.Web/sites@2024-04-01' = {
           type: 'blobContainer'
           value: '${storage.properties.primaryEndpoints.blob}${deploymentStorageContainerName}'
           authentication: {
-            type: 'SystemAssignedIdentity'
+            type: 'UserAssignedIdentity'
+            userAssignedIdentityResourceId: userManagedIdentityId
           }
         }
       }
@@ -84,7 +99,7 @@ resource storageRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-
   scope: storage
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', storageRoleDefinitionId)
-    principalId: flexFuncApp.identity.principalId
+    principalId: userManagedIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }
 }
